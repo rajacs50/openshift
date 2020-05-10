@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Registration
+{% endblock %}
+
+{% block main %}
+    <form action="/register" method="post" name="Form" onsubmit="return(validate());">
+        <div class="form-group">
+            <input autocomplete="off" autofocus class="form-control" name="username" placeholder="Username" type="text">
+        </div>
+        <div class="form-group">
+                <input class="form-control" name="password" type="password" pattern="^\S{6,}$" onchange="this.setCustomValidity(this.validity.patternMismatch ? 'Must have at least 6 characters' : ''); if(this.checkValidity()) form.confirmation.pattern = this.value;" placeholder="Password" required>
+        </div>
+        <div class="form-group">
+                <input class="form-control" id="confirmation" name="confirmation" type="password" pattern="^\S{6,}$" onchange="this.setCustomValidity(this.validity.patternMismatch ? 'Passwords does not match' : '');" placeholder="Verify Password" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Register</button>
+    </form>
+    <script>
+        function validate() {
+
+            if (document.Form.username.value == "") {
+                alert("Please enter a username!");
+                document.Form.username.focus();
+                return false;
+            }
+        }
+    </script>
+
+{% endblock %}

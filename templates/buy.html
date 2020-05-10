@@ -1,0 +1,45 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Buy
+{% endblock %}
+
+{% block main %}
+
+<form action="/buy" method="post" name="myForm" onsubmit="return(validate());">
+    <div class="form-group">
+        <input autocomplete="off" autofocus class="form-control" name="symbol" placeholder="Symbol" type="text">
+    </div>
+    <div class="form-group">
+        <input autocomplete="off" class="form-control" min="1" name="shares" placeholder="Shares" type="number">
+    </div>
+    <button class="btn btn-primary" type="submit">Buy</button>
+</form>
+
+<!-- check if the fields are blank and the shares is a positive int value / js -->
+
+<script>
+
+    function validate() {
+
+        if (document.myForm.symbol.value == "") {
+            alert("Please enter a symbol!");
+            document.myForm.symbol.focus();
+            return false;
+        }
+        if (document.myForm.shares.value == "") {
+            alert("Please enter the number of shares you wish to buy!");
+            document.myForm.shares.focus();
+            return false;
+        }
+        if (document.myForm.shares.value <= 0) {
+            alert("Value must be greater than or equal to 1");
+            document.myForm.shares.focus();
+            return false;
+        }
+        return (true);
+    }
+
+</script>
+
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Portfolio
+{% endblock %}
+
+{% block main %}
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>Name</th>
+            <th>Shares</th>
+            <th>Price</th>
+            <th>TOTAL</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Iterate through each item in the dict and output the Symbol, company name, num of shares, current share price, total holding value -->
+        {% for folio in folio %}
+            <tr>
+                <td>{{ folio['ticker'] }}</td>
+                <td>{{ folio['curr_price']['name'] }}</td>
+                <td>{{ folio['num_shares'] }}</td>
+                <td>${{ folio['curr_price']['price'] }}</td>
+                <td>${{ folio['total_holding'] }}</td>
+            </tr>
+        {% endfor %}
+        <tr>
+            <td colspan="4">Available Amount</td>
+            <td>{{ avail_bal }}</td>
+        </tr>
+    </tbody>
+    <tfoot>
+
+        <tr>
+            <td colspan="4">Total Value</td>
+            <td>{{ grand_total }}</td>
+        </tr>
+
+    </tfoot>
+</table>
+
+
+{% endblock %}
