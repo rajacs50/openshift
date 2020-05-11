@@ -34,8 +34,7 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # Configure database connection
-DATABASE_URL = "postgres://drmddgon:nUUx80PXWwPZ_MH_aZWtBo9kQk4pcGbf@satao.db.elephantsql.com:5432/drmddgon"
-engine = create_engine("DATABASE_URL")
+engine = create_engine("postgres://drmddgon:nUUx80PXWwPZ_MH_aZWtBo9kQk4pcGbf@satao.db.elephantsql.com:5432/drmddgon")
 db = scoped_session(sessionmaker(bind=engine))
 
 # Make sure API key is set
