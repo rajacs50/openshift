@@ -1,1 +1,2 @@
-web: python website/application.py runserver 0.0.0.0:$PORT
+web: gunicorn application:app
+web: gunicorn run:app
