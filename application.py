@@ -47,6 +47,7 @@ db = scoped_session(sessionmaker(bind=engine))
 def index():
     """Show portfolio of stocks"""
     # Query the DB for symbol, company name, num of share, for the given user
+    uid = dict(cuid=session['user_id'])
     hs = db.execute("""WITH bought_shares AS (
                             SELECT cuid, ticker, SUM(num_shares) AS num_bought_shares
                             FROM transaction
@@ -69,8 +70,9 @@ def index():
                             FROM transaction t
                             LEFT JOIN bought_shares b ON t.cuid=b.cuid AND t.ticker=b.ticker
                             LEFT JOIN sold_shares s ON t.cuid=s.cuid AND t.ticker=s.ticker
+                            WHERE t.cuid=:cuid
                             GROUP BY t.ticker, t.company, num_curr_shares
-                            ORDER BY t.ticker""", cuid=session['user_id']).fetchall()
+                            ORDER BY t.ticker""", uid).fetchall()
     # the query returns list of tuples, convert them to dict objects using list comprehension
     # need to declare variables so the dict func can iterate over and create a list of dicts
     keys = ("ticker", "company", "num_shares")
@@ -80,9 +82,8 @@ def index():
     # Call the helper func for the total value based on current share val
     total = float(tot())
     # Query for getting the current user cash bal and then change the dict in the list to float
-    cd = db.execute("SELECT cash FROM users WHERE id=:cuid", cuid=session['user_id'])
-    cash_dict = [dict(row) for row in cd.fetchall()]
-    avail_bal = float(cash_dict[0]['cash'])
+    cash = db.execute("SELECT cash FROM users WHERE id=:cuid", uid).fetchall()
+    avail_bal = float(format(cash[0][0], '.2f'))
     # Grand total is comprised of the avail bal, and the current holding share val
     grand_total = total + avail_bal
 
@@ -115,9 +116,8 @@ def buy():
                 # if valid check how much cash the user has and how much the user selected shares cost
                 # query user's available balance
                 uid = dict(cuid=session['user_id'])
-                cd = db.execute("SELECT cash FROM users WHERE id=:cuid", uid)
-                cash_list = [d['cash'] for d in cd]
-                avail_bal = int(cash_list[0])
+                cash = db.execute("SELECT cash FROM users WHERE id=:cuid", uid).fetchall()
+                avail_bal = float(format(cash[0][0], '.2f'))
                 # the return of price from the lookup above will be in dict, separate the price
                 sel_share_val = ticker["price"]
                 # get the number of shares from user input
@@ -128,17 +128,20 @@ def buy():
                 # Otherwise add the share to the user acc and deduct the money
                 else:
                     # insert the purchase details in the db
-                    sym = dict(ticker=ticker['symbol'])
+                    cp = dict(company=ticker['name'])
+                    tc = dict(ticker=ticker['symbol'])
                     pa = dict(price_atm=sel_share_val)
                     td = dict(trans_detail='by')
                     ns = dict(num_shares=num_shares)
-                    db.execute("INSERT INTO buy ('cuid', 'ticker', 'price_atm', 'trans_detail', 'num_shares') VALUES (:cuid, :ticker, :price_atm, :trans_detail, :num_shares)", (uid["cuid"], sym["ticker"], pa["price_atm"], td["trans_detail"], ns["num_shares"]))
+                    buy_share = {**uid, **tc, **pa, **td, **ns, **cp}
+                    db.execute("INSERT INTO transaction (cuid, ticker, price_atm, trans_detail, num_shares, company) VALUES (:cuid, :ticker, :price_atm, :trans_detail, :num_shares, :company)", buy_share)
                     # calculate the remaining bal for user after deducting his purchase
                     bal_updt = avail_bal - (sel_share_val * num_shares)
                     # update user acc with the new bal
                     bu = dict(cash=bal_updt)
-                    db.execute("UPDATE users SET cash = :cash WHERE id = :cuid", (bu["cash"], uid["cuid"]))
-                    conn.commit()
+                    update_bal = {**bu, **uid}
+                    db.execute("UPDATE users SET cash = :cash WHERE id = :cuid", update_bal)
+                    db.commit()
                     # display confirmation message and then return to portfolio
                     flash("Transaction(s) completed Successfully!")
                     # Redirect user to home page
@@ -156,8 +159,9 @@ def history():
     """Show history of transactions"""
     # Query the DB for symbol, num of share, curr_price, transacted time for the given user
     uid = dict(cuid=session['user_id'])
-    st = db.execute("SELECT ticker, CASE WHEN trans_detail = 'by' THEN num_shares ELSE '-' || num_shares END AS num_shares, price_atm, purchase_time FROM trans where cuid=:cuid ORDER BY purchase_time", uid)
-    share_trans = [dict(row) for row in st.fetchall()]
+    st = db.execute("SELECT ticker, CASE WHEN trans_detail = 'by' THEN num_shares::text ELSE '-' || num_shares::text END AS num_shares, price_atm, purchase_time FROM transaction WHERE cuid=:cuid ORDER BY purchase_time desc", uid).fetchall()
+    keys = ("ticker", "num_shares", "price_atm", "purchase_time")
+    share_trans = [dict(zip(keys, values)) for values in st]
     history = transaction(share_trans)
     return render_template("history.html", history=history)
 
@@ -181,15 +185,14 @@ def login():
             return apology("must provide password", 403)
 
         # Query database for username
-        db.execute("SELECT * FROM users WHERE username = :username", username=request.form.get("username"))
-        rows = [dict(row) for row in db.fetchall()]
+        username = dict(username=request.form.get("username"))
+        rows = db.execute("SELECT * FROM users WHERE username = :username", username).fetchall()
         # Ensure username exists and password is correct
-        if len(rows) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
-            print(check_password_hash(rows[0]["hash"], request.form.get("password")))
+        if len(rows) != 1 or not check_password_hash(rows[0][2], request.form.get("password")):
             return apology("invalid username and/or password", 403)
 
         # Remember which user has logged in
-        session["user_id"] = rows[0]["id"]
+        session["user_id"] = rows[0][0]
 
         # Redirect user to home page
         return redirect("/")
@@ -229,8 +232,8 @@ def password():
 
         # Query database for username
         username = dict(username=request.form.get("username"))
-        db.execute("SELECT * FROM users WHERE username = :username", username)
-        check_username = [dict(row) for row in db.fetchall()]
+        rows = db.execute("SELECT * FROM users WHERE username = :username", username).fetchall()
+        check_username = rows[0][1]
 
         # Check if username exists in the DB
         if len(check_username) == 0:
@@ -239,10 +242,10 @@ def password():
 
         else:
             # Hash the password and update the table
-            h_pass = generate_password_hash(request.form.get("password"))
-            hp = dict(hashed_pass=h_pass)
-            db.execute("UPDATE users SET 'hash'=:hashed_pass", hp)
-            conn.commit()
+            hashed_pass = dict(hashed_pass=generate_password_hash(request.form.get("password")))
+            user_creds = {**username, **hashed_pass}
+            db.execute("UPDATE users SET hash=:hashed_pass", user_creds)
+            db.commit()
             return redirect("/")
 
     else:
@@ -287,7 +290,8 @@ def register():
             return apology("must provide password", 403)
 
         # Query database for username
-        check_username = db.execute("SELECT username FROM users WHERE username = :username", username=request.form.get("username")).fetchall()
+        username = dict(username=request.form.get("username"))
+        check_username = db.execute("SELECT * FROM users WHERE username = :username", username).fetchall()
 
         # Ensure username does not exist in the DB
         if len(check_username) > 0:
@@ -296,10 +300,12 @@ def register():
 
         else:
             # Add username, hash the password and add it to the DB
-            hashed_pass = generate_password_hash(request.form.get("password"))
-            db.execute("INSERT INTO users ('username', 'hash') VALUES (:username, :hashed_pass)", username=request.form.get("username"), hashed_pass=hashed_pass)
+            hashed_pass = dict(hashed_pass=generate_password_hash(request.form.get("password")))
+            create_creds = {**username, **hashed_pass}
+            new_user = db.execute("INSERT INTO users (username, hash) VALUES (:username, :hashed_pass) RETURNING id", create_creds).fetchall()
+            db.commit()
             flash("Registration Successfull!")
-            session["user_id"] = db.lastrowid
+            session["user_id"] = new_user[0][0]
             return redirect("/")
 
     else:
@@ -312,10 +318,37 @@ def sell():
     """Sell shares of stock"""
     # Query the user inputted str to check if user has that in holding
     uid = dict(cuid=session['user_id'])
-    db.execute("SELECT b.ticker, IFNULL((b.num_shares-s.num_shares),b.num_shares) AS num_shares FROM buy b LEFT JOIN sell s ON b.cuid=s.cuid AND b.ticker=s.ticker where b.cuid=:cuid GROUP BY b.ticker ORDER BY b.ticker", uid)
-    own_share = db.fetchall()
+    hold_share = db.execute("""WITH bought_shares AS (
+                            SELECT cuid, ticker, SUM(num_shares) AS num_bought_shares
+                            FROM transaction
+                            WHERE cuid=:cuid AND trans_detail='by'
+                            GROUP BY cuid, ticker
+                            ORDER BY ticker),
+                            
+                            sold_shares AS (
+                                SELECT cuid, ticker, SUM(num_shares) AS num_sold_shares
+                                FROM transaction
+                                WHERE cuid=:cuid AND trans_detail='sl'
+                                GROUP BY cuid, ticker
+                                ORDER BY ticker)
+                                
+                            SELECT t.ticker,
+                                CASE
+                                    WHEN b.num_bought_shares - s.num_sold_shares IS NULL THEN b.num_bought_shares
+                                    ELSE b.num_bought_shares - s.num_sold_shares
+                                END AS num_curr_shares
+                            FROM transaction t
+                            LEFT JOIN bought_shares b ON t.cuid=b.cuid AND t.ticker=b.ticker
+                            LEFT JOIN sold_shares s ON t.cuid=s.cuid AND t.ticker=s.ticker
+                            WHERE t.cuid=:cuid
+                            GROUP BY t.ticker, num_curr_shares
+                            ORDER BY t.ticker""", uid).fetchall()
+    
+    # Convert output to a dict
+    keys = ("ticker", "num_shares")
+    own_share = [dict(zip(keys, values)) for values in hold_share]
     # SET comprehension to get the unique ticker names
-    share_avail = {l['ticker'] for l in own_share}
+    share_avail = {hold_share[i][0] for i in range(len(hold_share))}
     # User reached route via GET display the sell page
     if request.method == "GET":
         return render_template("sell.html", share_avail=share_avail)
@@ -338,27 +371,29 @@ def sell():
                     if share['num_shares'] < int(request.form.get("shares")):
                         return apology("Too many Shares", 400)
                     else:
-                        # since the return of price will be in dict, separate the price
-                        price = lookup(request.form.get("symbol"))
-                        sel_share_val = price['price']
+                        # since the return of price will be in dict, separate the price Pass the user inputted str to lookup helper func
+                        ticker = lookup(request.form.get("symbol"))
+                        sel_share_val = ticker['price']
                         # get the number of shares from user input
                         num_shares = int(request.form.get("shares"))
                         # insert the sold details in the db
-                        sym = dict(ticker=request.form.get("symbol"))
+                        cp = dict(company=ticker['name'])
+                        tc = dict(ticker=request.form.get("symbol"))
                         pa = dict(price_atm=sel_share_val)
                         td = dict(trans_detail='sl')
                         ns = dict(num_shares=num_shares)
-                        db.execute("INSERT INTO sell ('cuid', 'ticker', 'price_atm', 'trans_detail', 'num_shares') VALUES (:cuid, :ticker, :price_atm, :trans_detail, :num_shares)", (uid["cuid"], sym["ticker"], pa["price_atm"], td["trans_detail"], ns["num_shares"]))
+                        sell_share = {**uid, **tc, **pa, **td, **ns, **cp}
+                        db.execute("INSERT INTO transaction (cuid, ticker, price_atm, trans_detail, num_shares, company) VALUES (:cuid, :ticker, :price_atm, :trans_detail, :num_shares, :company)", sell_share)
                         # Query for getting the current user cash bal and then change the dict in the list to float
-                        cd = db.execute("SELECT cash FROM users WHERE id=:cuid", uid)
-                        cash_dict = [dict(row) for row in cd.fetchall()]
-                        avail_bal = float(cash_dict[0]['cash'])
-                        # calculate the remaining bal for user after deducting his purchase
+                        cash_list = db.execute("SELECT cash FROM users WHERE id=:cuid", uid).fetchall()
+                        avail_bal = float(format(cash_list[0][0], '.2f'))
+                        # calculate the remaining bal for user after adding the value for the sold shares
                         bal_updt = avail_bal + (sel_share_val * num_shares)
                         # update user acc with the new bal
                         bu = dict(cash=bal_updt)
-                        db.execute("UPDATE users SET cash = :cash WHERE id = :cuid", (bu["cash"], uid["cuid"]))
-                        conn.commit()
+                        update_bal = {**bu, **uid}
+                        db.execute("UPDATE users SET cash = :cash WHERE id = :cuid", update_bal)
+                        db.commit()
                         # display confirmation message and then return to portfolio
                         flash("Transaction(s) completed Successfully!")
                         # Redirect user to home page
