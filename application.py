@@ -2,7 +2,7 @@ import os
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
-from flask import Flask, flash, jsonify, redirect, render_template, request, session
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_session import Session
 from tempfile import mkdtemp
 from werkzeug.exceptions import default_exceptions, HTTPException, InternalServerError
@@ -34,7 +34,7 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # Configure database connection
-engine = create_engine("postgres://drmddgon:nUUx80PXWwPZ_MH_aZWtBo9kQk4pcGbf@satao.db.elephantsql.com:5432/drmddgon")
+engine = create_engine(os.environ.get("postgres"))
 db = scoped_session(sessionmaker(bind=engine))
 
 # Make sure API key is set

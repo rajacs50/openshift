@@ -4,6 +4,7 @@ import urllib.parse
 
 from flask import redirect, render_template, request, session
 from functools import wraps
+import settings
 
 
 def apology(message, code=400):
@@ -40,8 +41,7 @@ def lookup(symbol):
 
     # Contact API
     try:
-        # api_key = os.environ.get("API_KEY")
-        api_key = "pk_c198ae541c8d47cabe6bd126e427c2d4"
+        api_key = os.environ.get("API_KEY")
         response = requests.get(f"https://cloud-sse.iexapis.com/stable/stock/{urllib.parse.quote_plus(symbol)}/quote?token={api_key}")
         response.raise_for_status()
     except requests.RequestException:
