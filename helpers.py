@@ -4,7 +4,7 @@ import urllib.parse
 
 from flask import redirect, render_template, request, session
 from functools import wraps
-import settings
+# import settings
 
 
 def apology(message, code=400):
