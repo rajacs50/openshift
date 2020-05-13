@@ -40,6 +40,7 @@ db = scoped_session(sessionmaker(bind=engine))
 # Make sure API key is set
 # if not os.environ.get("API_KEY"):
 #     raise RuntimeError("API_KEY not set")
+# Adding a comment for a build.
 
 
 @app.route("/")
