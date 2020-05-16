@@ -34,7 +34,7 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # Configure database connection
-engine = create_engine(os.environ.get("postgres"))
+engine = create_engine(os.environ.get("DATABASE_URL"))
 db = scoped_session(sessionmaker(bind=engine))
 
 # Make sure API key is set
